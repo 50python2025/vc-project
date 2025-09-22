@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ポモドーロタイマー</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="timer-card" aria-live="polite">
+      <header class="card-header">
+        <div class="brand-mark">
+          <span class="brand-led"></span>
+          <span class="brand-name">Focus Mode</span>
+        </div>
+        <p class="session-status" id="sessionStatus">フォーカスセッション</p>
+      </header>
+
+      <nav class="mode-switch" aria-label="セッション選択">
+        <button type="button" class="mode-button is-active" data-mode="focus">フォーカス</button>
+        <button type="button" class="mode-button" data-mode="short">ショートブレイク</button>
+        <button type="button" class="mode-button" data-mode="long">ロングブレイク</button>
+      </nav>
+
+      <div class="timer-dial" id="timerDial" role="timer" aria-live="assertive">
+        <div class="timer-progress"></div>
+        <div class="timer-dial-inner">
+          <p class="time-display" id="timeDisplay">25:00</p>
+          <p class="mode-label" id="modeLabel">フォーカス</p>
+        </div>
+      </div>
+
+      <div class="timer-controls">
+        <button type="button" class="control-button primary" id="startPauseButton">スタート</button>
+        <button type="button" class="control-button" id="skipButton">スキップ</button>
+        <button type="button" class="control-button" id="resetButton">リセット</button>
+      </div>
+
+      <dl class="timer-meta">
+        <div class="meta-item">
+          <dt>完了したポモドーロ</dt>
+          <dd id="completedCount">0</dd>
+        </div>
+        <div class="meta-item">
+          <dt>次のセッション</dt>
+          <dd id="queueLabel">ショートブレイク</dd>
+        </div>
+      </dl>
+
+      <p class="timer-message" id="timerMessage">1 セッション 25 分で集中しましょう。</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
