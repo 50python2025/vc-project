@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>あみだくじアプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>あみだくじ</h1>
+        <div class="controls">
+            <div class="input-group">
+                <label for="participants">参加者 (改行で区切る)</label>
+                <textarea id="participants" rows="4">Aさん
+Bさん
+Cさん
+Dさん</textarea>
+            </div>
+            <div class="input-group">
+                <label for="results">結果 (改行で区切る)</label>
+                <textarea id="results" rows="4">あたり
+はずれ
+お菓子
+ジュース</textarea>
+            </div>
+            <button id="generateBtn">あみだくじを作成</button>
+        </div>
+        <div class="amida-wrapper">
+            <canvas id="amidaCanvas"></canvas>
+        </div>
+        <div class="result-display">
+            <button id="revealBtn" style="display: none;">すべての結果を見る</button>
+            <p id="resultText"></p>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
