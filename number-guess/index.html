@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1M1P</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>1M1P</h1>
+
+    <div class="rules">
+        <h2>ルール説明</h2>
+        <ul>
+            <li>コンピュータが重複しない3桁の数字を生成します。</li>
+            <li>3桁の数字を予想して入力してください。</li>
+            <li>結果は <code>M</code> と <code>P</code> で表示されます。</li>
+            <li><code>M</code> (Match): 数字と場所の両方が合っている数。</li>
+            <li><code>P</code> (Position): 数字は合っているが場所が違う数。</li>
+            <li><strong>3M0P</strong> を目指してください！</li>
+        </ul>
+    </div>
+
+    <p>それでは、3桁のユニークな数字を当ててください。</p>
+    
+    <div class="input-area">
+        <input type="text" id="guess-input" maxlength="3" placeholder="3桁の数字">
+        <button id="guess-button">予想する</button>
+    </div>
+
+    <div id="result-area">
+        <h2>結果</h2>
+        <ul id="history">
+            <!-- 予想の履歴がここに追加されます -->
+        </ul>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
