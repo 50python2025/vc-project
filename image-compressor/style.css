@@ -1,0 +1,17 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.img-fluid {
+    max-height: 300px;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+#result h5 {
+    margin-top: 15px;
+}
