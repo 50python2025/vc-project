@@ -421,7 +421,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="book-detail-header">
                 <img src="${escapeHtml(book.cover || defaultCover)}" alt="${escapeHtml(book.title)}の表紙" class="book-detail-cover">
                 <div class="book-detail-meta">
-                    <h2>${escapeHtml(book.title)}</h2>
+                    <div class="book-detail-meta-header">
+                        <h2>${escapeHtml(book.title)}</h2>
+                        <button type="button" class="icon-button danger" data-action="delete-book" data-book-id="${book.id}" aria-label="書籍を削除">🗑️</button>
+                    </div>
                     <p class="book-detail-author">${escapeHtml(book.author)}</p>
                     ${book.isbn ? `<p class="book-detail-isbn">ISBN: ${escapeHtml(book.isbn)}</p>` : ''}
                 </div>
@@ -437,7 +440,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </section>
             <button id="add-memo-fab" class="fab" type="button" aria-label="メモを追加">+</button>
         `;
-
         const addMemoFab = document.getElementById('add-memo-fab');
         if (addMemoFab) {
             addMemoFab.addEventListener('click', () => {
@@ -785,6 +787,35 @@ document.addEventListener('DOMContentLoaded', () => {
         openMemoForm(bookId, memo);
     }
 
+
+    function handleDeleteBook(bookId) {
+        if (!bookId) {
+            return;
+        }
+        const book = appData.books[bookId];
+        if (!book) {
+            return;
+        }
+        if (!confirm(`「${book.title}」を削除しますか？
+登録済みのメモもすべて削除されます。`)) {
+            return;
+        }
+        delete appData.books[bookId];
+        if (currentBookId === bookId) {
+            currentBookId = null;
+        }
+        activeBookTagFilter = null;
+        saveData();
+        renderBookshelf();
+        updateTagSuggestions();
+        updateSearchTagFilter();
+        if (searchScreen && searchScreen.classList.contains('active')) {
+            refreshSearchView();
+        }
+        alert(`「${book.title}」を削除しました。`);
+        showScreen('bookshelf-screen');
+    }
+
     function handleBookTagFilter(tagValue) {
         activeBookTagFilter = tagValue ? tagValue : null;
         renderBookDetail();
@@ -991,6 +1022,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'open-book-from-search':
                 openBookFromSearch(actionButton.dataset.bookId);
+                break;
+            case 'delete-book':
+                handleDeleteBook(actionButton.dataset.bookId);
                 break;
             case 'back-to-bookshelf':
                 currentBookId = null;

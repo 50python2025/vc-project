@@ -67,6 +67,15 @@ header {
     background-color: rgba(96, 165, 250, 0.18);
     transform: translateY(-1px);
 }
+
+.icon-button.danger {
+    color: #fca5a5;
+}
+
+.icon-button.danger:hover {
+    background-color: rgba(248, 113, 113, 0.2);
+    color: #fecaca;
+}
 main {
     max-width: 960px;
     margin: 0 auto;
@@ -482,6 +491,18 @@ button.secondary.small {
     border-radius: 12px;
     box-shadow: var(--shadow-sm);
 }
+.book-detail-meta-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.book-detail-meta-header h2 {
+    margin: 0;
+}
+
 .book-detail-meta h2 {
     margin: 0 0 8px;
 }
