@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>読書メモアプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1 id="header-title">本棚</h1>
+        <button id="search-button" class="icon-button" aria-label="検索画面を開く">
+            <span aria-hidden="true">🔍</span>
+        </button>
+    </header>
+    <main id="app-container">
+        <section id="bookshelf-screen" class="screen active" aria-labelledby="header-title">
+            <div class="bookshelf-empty" id="bookshelf-empty" hidden>
+                <p>まだ書籍が登録されていません。右下のボタンから追加できます。</p>
+            </div>
+            <div class="book-list" id="book-list"></div>
+            <button id="add-book-button" class="fab" type="button" aria-label="書籍を追加">+</button>
+        </section>
+        <section id="book-detail-screen" class="screen" aria-live="polite"></section>
+        <section id="memo-form-screen" class="screen">
+            <h2 id="memo-form-title">メモを追加</h2>
+            <form id="memo-form">
+                <label class="field">
+                    <span class="field-label">テキスト</span>
+                    <textarea id="memo-text" placeholder="気づきや要点を自由に記録" rows="5"></textarea>
+                </label>
+                <label class="field">
+                    <span class="field-label">引用</span>
+                    <textarea id="memo-quote" placeholder="特に重要な一節を引用として記録" rows="3"></textarea>
+                </label>
+                <div class="field">
+                    <span class="field-label">写真</span>
+                    <div class="photo-input-row">
+                        <button type="button" id="attach-photo-button" class="secondary">写真を選択</button>
+                        <input type="file" id="photo-input" accept="image/*" multiple hidden>
+                    </div>
+                    <div id="memo-photo-preview" class="photo-preview-grid"></div>
+                </div>
+                <label class="field">
+                    <span class="field-label">タグ</span>
+                    <input type="text" id="memo-tags" placeholder="カンマ区切りで入力（例: マーケティング, リーダーシップ）">
+                </label>
+                <div class="tag-suggestions-wrapper">
+                    <p class="tag-suggestions-title">よく使うタグ</p>
+                    <div id="memo-tag-suggestions" class="tag-suggestions"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="memo-cancel-button" class="secondary">キャンセル</button>
+                    <button type="submit" class="primary">保存</button>
+                </div>
+            </form>
+        </section>
+        <section id="search-screen" class="screen">
+            <div class="search-bar">
+                <input type="search" id="search-input" placeholder="キーワードやタグで検索">
+                <button type="button" id="clear-search-button" class="secondary">クリア</button>
+            </div>
+            <div class="tag-filter-section">
+                <p class="tag-suggestions-title">タグで絞り込む</p>
+                <div id="search-tag-filter" class="tag-filter"></div>
+            </div>
+            <div id="search-results" class="search-results"></div>
+        </section>
+    </main>
+    <nav id="bottom-nav">
+        <button id="nav-bookshelf" class="nav-button active" type="button">本棚</button>
+        <button id="nav-search" class="nav-button" type="button">検索</button>
+    </nav>
+    <div id="book-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="book-form-title">
+        <div class="modal-backdrop" id="book-modal-backdrop"></div>
+        <div class="modal-panel">
+            <button type="button" class="modal-close" id="book-modal-close" aria-label="閉じる">×</button>
+            <h2 id="book-form-title">書籍を追加</h2>
+            <form id="book-form">
+                <label class="field">
+                    <span class="field-label">タイトル</span>
+                    <input type="text" id="book-title-input" required placeholder="書籍タイトル">
+                </label>
+                <label class="field">
+                    <span class="field-label">著者</span>
+                    <input type="text" id="book-author-input" placeholder="著者名">
+                </label>
+                <label class="field">
+                    <span class="field-label">ISBN</span>
+                    <input type="text" id="book-isbn-input" placeholder="13桁もしくは10桁の番号">
+                </label>
+                <label class="field">
+                    <span class="field-label">カバー画像URL</span>
+                    <input type="url" id="book-cover-url-input" placeholder="画像のURLを入力（任意）">
+                </label>
+                <div class="field">
+                    <span class="field-label">カバー画像をアップロード</span>
+                    <input type="file" id="book-cover-input" accept="image/*">
+                    <div class="book-cover-preview">
+                        <img id="book-cover-preview" alt="カバー画像のプレビュー" hidden>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="book-form-cancel" class="secondary">キャンセル</button>
+                    <button type="submit" class="primary">追加する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
