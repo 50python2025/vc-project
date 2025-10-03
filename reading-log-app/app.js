@@ -797,15 +797,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!scanModal) {
             return;
         }
+        if (!window.isSecureContext && location.hostname != 'localhost') {
+            setScanStatus('HTTPS もしくは localhost でアクセスするとカメラが利用できます。手動入力をご利用ください。');
+            scanModal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            return;
+        }
+        if (scanVideo) {
+            scanVideo.setAttribute('playsinline', 'true');
+        }
         setScanStatus('カメラを初期化しています…');
         scanModal.classList.remove('hidden');
         document.body.classList.add('modal-open');
-        try {
-            await startBarcodeScan();
-        } catch (error) {
-            console.error('Failed to start scan modal', error);
-            setScanStatus('カメラを起動できませんでした。手動入力をご利用ください。');
-        }
+        await startBarcodeScan();
     }
 
     function closeScanModal() {
@@ -825,15 +829,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function startBarcodeScan() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setScanStatus('ブラウザがカメラアクセスに対応していません。手動入力をご利用ください。');
+            return;
+        }
         try {
             const reader = await ensureBarcodeReader();
             const devices = await barcodeModule.BrowserMultiFormatReader.listVideoInputDevices();
-            let deviceId;
+            let selectedDeviceId = null;
             if (devices && devices.length > 0) {
                 const backCamera = devices.find(device => /back|rear/gi.test(device.label));
-                deviceId = backCamera ? backCamera.deviceId : devices[0].deviceId;
+                selectedDeviceId = backCamera ? backCamera.deviceId : devices[0].deviceId;
             }
-            scanControls = await reader.decodeFromVideoDevice(deviceId || undefined, scanVideo, (result, error) => {
+            const constraints = selectedDeviceId
+                ? { video: { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
+                : { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } };
+            scanControls = await reader.decodeFromConstraints(constraints, scanVideo, (result, error) => {
                 if (result) {
                     const value = typeof result.getText === 'function' ? result.getText() : result.text;
                     handleScanResult(value);
@@ -844,10 +855,15 @@ document.addEventListener('DOMContentLoaded', () => {
             setScanStatus('バーコードが映るように端末をかざしてください。');
             isProcessingScan = false;
         } catch (error) {
-            console.error('Failed to start barcode scanning', error);
-            setScanStatus('カメラを起動できませんでした。手動入力をご利用ください。');
+            if (error && error.name === 'NotAllowedError') {
+                setScanStatus('カメラへのアクセスが許可されませんでした。ブラウザの設定を確認してください。');
+            } else if (error && error.name === 'NotFoundError') {
+                setScanStatus('利用できるカメラが見つかりませんでした。手動入力をご利用ください。');
+            } else {
+                setScanStatus('カメラを起動できませんでした。手動入力をご利用ください。');
+            }
             isProcessingScan = false;
-            throw error;
+            console.error('Failed to start barcode scanning', error);
         }
     }
 
