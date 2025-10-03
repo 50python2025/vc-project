@@ -78,6 +78,10 @@
             <button type="button" class="modal-close" id="book-modal-close" aria-label="閉じる">×</button>
             <h2 id="book-form-title">書籍を追加</h2>
             <form id="book-form">
+                <div class="scan-actions">
+                    <button type="button" id="book-scan-button" class="secondary">バーコードをスキャン</button>
+                    <p class="scan-helper">ISBNのバーコードをカメラで読み取ります。</p>
+                </div>
                 <label class="field">
                     <span class="field-label">タイトル</span>
                     <input type="text" id="book-title-input" required placeholder="書籍タイトル">
@@ -106,6 +110,21 @@
                     <button type="submit" class="primary">追加する</button>
                 </div>
             </form>
+        </div>
+    </div>
+    <div id="scan-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scan-modal-title">
+        <div class="modal-backdrop" id="scan-modal-backdrop"></div>
+        <div class="modal-panel scan-modal-panel">
+            <button type="button" class="modal-close" id="scan-modal-close" aria-label="閉じる">×</button>
+            <h2 id="scan-modal-title">ISBNをスキャン</h2>
+            <div class="scan-video-wrapper">
+                <video id="scan-video" autoplay muted playsinline></video>
+            </div>
+            <p id="scan-status" class="scan-status">バーコードが映るように端末をかざしてください。</p>
+            <div class="form-actions scan-actions-row">
+                <button type="button" id="scan-retry-button" class="secondary">再スキャン</button>
+                <button type="button" id="scan-cancel-button" class="secondary">キャンセル</button>
+            </div>
         </div>
     </div>
     <script src="app.js"></script>

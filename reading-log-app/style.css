@@ -308,6 +308,47 @@ textarea::placeholder {
     height: 120px;
     object-fit: cover;
 }
+
+.scan-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.scan-actions .secondary {
+    align-self: flex-start;
+}
+.scan-helper {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted-text);
+}
+.scan-modal-panel {
+    max-width: min(520px, 100%);
+}
+.scan-video-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background-color: rgba(15, 23, 42, 0.6);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 16px;
+}
+#scan-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.scan-status {
+    margin: 0 0 16px;
+    font-size: 0.9rem;
+    color: var(--muted-text);
+}
+.scan-actions-row {
+    justify-content: space-between;
+}
 .remove-photo-button {
     position: absolute;
     top: 6px;

@@ -41,11 +41,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookCoverUrlInput = document.getElementById('book-cover-url-input');
     const bookCoverInput = document.getElementById('book-cover-input');
     const bookCoverPreview = document.getElementById('book-cover-preview');
+    const bookScanButton = document.getElementById('book-scan-button');
+    const scanModal = document.getElementById('scan-modal');
+    const scanModalBackdrop = document.getElementById('scan-modal-backdrop');
+    const scanModalClose = document.getElementById('scan-modal-close');
+    const scanVideo = document.getElementById('scan-video');
+    const scanStatus = document.getElementById('scan-status');
+    const scanRetryButton = document.getElementById('scan-retry-button');
+    const scanCancelButton = document.getElementById('scan-cancel-button');
 
     let appData = { books: {} };
     let currentBookId = null;
     let activeBookTagFilter = null;
     let bookCoverDraft = null;
+    let barcodeModule = null;
+    let barcodeReader = null;
+    let scanControls = null;
+    let isProcessingScan = false;
+
 
     const memoFormState = {
         editingBookId: null,
@@ -691,6 +704,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function closeBookModal() {
+        if (scanModal && !scanModal.classList.contains('hidden')) {
+            closeScanModal();
+        }
         bookModal.classList.add('hidden');
         document.body.classList.remove('modal-open');
         resetBookForm();
@@ -748,6 +764,188 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+
+    function normalizeIsbn(rawValue) {
+        if (!rawValue) {
+            return null;
+        }
+        const digits = rawValue.replace(/[^0-9Xx]/g, '');
+        if (digits.length === 13 || digits.length === 10) {
+            return digits.toUpperCase();
+        }
+        return null;
+    }
+
+    function setScanStatus(message) {
+        if (scanStatus) {
+            scanStatus.textContent = message;
+        }
+    }
+
+    async function ensureBarcodeReader() {
+        if (barcodeReader) {
+            return barcodeReader;
+        }
+        if (!barcodeModule) {
+            barcodeModule = await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.3/+esm');
+        }
+        barcodeReader = new barcodeModule.BrowserMultiFormatReader();
+        return barcodeReader;
+    }
+
+    async function openScanModal() {
+        if (!scanModal) {
+            return;
+        }
+        setScanStatus('カメラを初期化しています…');
+        scanModal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        try {
+            await startBarcodeScan();
+        } catch (error) {
+            console.error('Failed to start scan modal', error);
+            setScanStatus('カメラを起動できませんでした。手動入力をご利用ください。');
+        }
+    }
+
+    function closeScanModal() {
+        if (!scanModal) {
+            return;
+        }
+        stopBarcodeScan();
+        if (scanModal.classList.contains('hidden')) {
+            return;
+        }
+        scanModal.classList.add('hidden');
+        if (bookModal.classList.contains('hidden')) {
+            document.body.classList.remove('modal-open');
+        }
+        setScanStatus('バーコードが映るように端末をかざしてください。');
+        isProcessingScan = false;
+    }
+
+    async function startBarcodeScan() {
+        try {
+            const reader = await ensureBarcodeReader();
+            const devices = await barcodeModule.BrowserMultiFormatReader.listVideoInputDevices();
+            let deviceId;
+            if (devices && devices.length > 0) {
+                const backCamera = devices.find(device => /back|rear/gi.test(device.label));
+                deviceId = backCamera ? backCamera.deviceId : devices[0].deviceId;
+            }
+            scanControls = await reader.decodeFromVideoDevice(deviceId || undefined, scanVideo, (result, error) => {
+                if (result) {
+                    const value = typeof result.getText === 'function' ? result.getText() : result.text;
+                    handleScanResult(value);
+                } else if (error && barcodeModule && !(error instanceof barcodeModule.NotFoundException)) {
+                    console.warn('Barcode scan error', error);
+                }
+            });
+            setScanStatus('バーコードが映るように端末をかざしてください。');
+            isProcessingScan = false;
+        } catch (error) {
+            console.error('Failed to start barcode scanning', error);
+            setScanStatus('カメラを起動できませんでした。手動入力をご利用ください。');
+            isProcessingScan = false;
+            throw error;
+        }
+    }
+
+    function stopBarcodeScan() {
+        if (scanControls) {
+            try {
+                scanControls.stop();
+            } catch (error) {
+                console.warn('Failed to stop scan controls', error);
+            }
+            scanControls = null;
+        }
+        if (scanVideo && scanVideo.srcObject) {
+            const tracks = scanVideo.srcObject.getTracks ? scanVideo.srcObject.getTracks() : [];
+            tracks.forEach(track => track.stop());
+            scanVideo.srcObject = null;
+        }
+    }
+
+    async function handleScanResult(rawValue) {
+        if (!rawValue || isProcessingScan) {
+            return;
+        }
+        const normalized = normalizeIsbn(rawValue);
+        if (!normalized) {
+            setScanStatus('コードを読み取りましたが、ISBNとして認識できませんでした。');
+            return;
+        }
+        isProcessingScan = true;
+        setScanStatus(`ISBN ${normalized} を取得しました。書誌情報を検索しています…`);
+        stopBarcodeScan();
+        prefillBookFormWithData({ isbn: normalized });
+        const bookData = await fetchBookDataByIsbn(normalized);
+        if (bookData) {
+            prefillBookFormWithData(bookData);
+            closeScanModal();
+            if (bookModal.classList.contains('hidden')) {
+                openBookModal();
+            }
+            setTimeout(() => bookTitleInput.focus(), 0);
+        } else {
+            setScanStatus(`ISBN ${normalized} の書誌情報を取得できませんでした。手動で入力してください。`);
+            isProcessingScan = false;
+        }
+    }
+
+    async function fetchBookDataByIsbn(isbn) {
+        try {
+            const response = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+            if (!response.ok) {
+                return null;
+            }
+            const data = await response.json();
+            let authorName = '';
+            if (Array.isArray(data.authors) && data.authors.length > 0 && data.authors[0].key) {
+                try {
+                    const authorResp = await fetch(`https://openlibrary.org${data.authors[0].key}.json`);
+                    if (authorResp.ok) {
+                        const authorData = await authorResp.json();
+                        authorName = authorData.name || '';
+                    }
+                } catch (authorError) {
+                    console.warn('Failed to fetch author metadata', authorError);
+                }
+            }
+            const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+            return {
+                title: data.title || '',
+                author: authorName || data.by_statement || '著者未設定',
+                cover: coverUrl,
+                isbn
+            };
+        } catch (error) {
+            console.error('Failed to fetch book metadata', error);
+            return null;
+        }
+    }
+
+    function prefillBookFormWithData(data) {
+        if (!data) {
+            return;
+        }
+        if (data.title) {
+            bookTitleInput.value = data.title;
+        }
+        if (data.author) {
+            bookAuthorInput.value = data.author;
+        }
+        if (data.isbn) {
+            bookIsbnInput.value = data.isbn;
+        }
+        if (data.cover) {
+            bookCoverUrlInput.value = data.cover;
+            bookCoverDraft = null;
+            updateBookCoverPreview(data.cover);
+        }
+    }
+
     function handleDeleteMemo(bookId, memoId) {
         if (!bookId || !memoId) {
             return;
@@ -786,7 +984,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentBookId = bookId;
         openMemoForm(bookId, memo);
     }
-
 
     function handleDeleteBook(bookId) {
         if (!bookId) {
@@ -995,6 +1192,38 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBookCoverPreview(url);
     });
 
+    if (bookScanButton) {
+        bookScanButton.addEventListener('click', () => {
+            openScanModal().catch(error => console.error('Failed to open scan modal', error));
+        });
+    }
+
+    if (scanCancelButton) {
+        scanCancelButton.addEventListener('click', () => {
+            closeScanModal();
+        });
+    }
+
+    if (scanModalClose) {
+        scanModalClose.addEventListener('click', () => {
+            closeScanModal();
+        });
+    }
+
+    if (scanModalBackdrop) {
+        scanModalBackdrop.addEventListener('click', () => {
+            closeScanModal();
+        });
+    }
+
+    if (scanRetryButton) {
+        scanRetryButton.addEventListener('click', () => {
+            stopBarcodeScan();
+            setScanStatus('カメラを初期化しています…');
+            startBarcodeScan().catch(error => console.error('Failed to restart barcode scan', error));
+        });
+    }
+
     document.body.addEventListener('click', event => {
         const actionButton = event.target.closest('[data-action]');
         if (!actionButton) {
@@ -1038,6 +1267,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
+            if (scanModal && !scanModal.classList.contains('hidden')) {
+                closeScanModal();
+                return;
+            }
             if (!bookModal.classList.contains('hidden')) {
                 closeBookModal();
             } else if (memoFormScreen.classList.contains('active')) {
