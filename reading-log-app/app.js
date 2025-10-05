@@ -835,13 +835,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const reader = await ensureBarcodeReader();
-            const constraints = { 
-                video: { 
-                    facingMode: 'environment', 
-                    width: { ideal: 1280 }, 
-                    height: { ideal: 720 } 
-                } 
-            };
+            const constraints = { video: true };
             scanControls = await reader.decodeFromConstraints(constraints, scanVideo, (result, error) => {
                 if (result) {
                     const value = typeof result.getText === 'function' ? result.getText() : result.text;
