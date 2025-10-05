@@ -58,7 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let barcodeReader = null;
     let scanControls = null;
     let isProcessingScan = false;
-
+    let useBarcodeDetectorAPI = false;
+    let barcodeDetector = null;
 
     const memoFormState = {
         editingBookId: null,
@@ -764,15 +765,186 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ==================== バーコードスキャン機能（改善版） ====================
 
+    // ブラウザがBarcodeDetector APIをサポートしているか確認
+    async function checkBarcodeDetectorSupport() {
+        if ('BarcodeDetector' in window) {
+            try {
+                const formats = await window.BarcodeDetector.getSupportedFormats();
+                useBarcodeDetectorAPI = formats.includes('ean_13');
+                console.log('BarcodeDetector API available:', useBarcodeDetectorAPI);
+                return useBarcodeDetectorAPI;
+            } catch (error) {
+                console.warn('BarcodeDetector check failed:', error);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    // BarcodeDetector APIを使用したスキャン（高速・ネイティブ対応）
+    async function initBarcodeDetector() {
+        if (!barcodeDetector && useBarcodeDetectorAPI) {
+            try {
+                barcodeDetector = new window.BarcodeDetector({
+                    formats: ['ean_13', 'ean_8']
+                });
+                console.log('BarcodeDetector initialized');
+            } catch (error) {
+                console.error('Failed to initialize BarcodeDetector:', error);
+                useBarcodeDetectorAPI = false;
+            }
+        }
+        return barcodeDetector;
+    }
+
+    // BarcodeDetector APIを使用した連続スキャン
+    async function startBarcodeDetectorScan(videoElement) {
+        const detector = await initBarcodeDetector();
+        if (!detector) {
+            return null;
+        }
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        let isScanning = true;
+        let lastScanTime = 0;
+        const scanInterval = 300; // 300msごとにスキャン
+
+        const scanLoop = async () => {
+            if (!isScanning || !videoElement.videoWidth) {
+                return;
+            }
+
+            const now = Date.now();
+            if (now - lastScanTime < scanInterval) {
+                requestAnimationFrame(scanLoop);
+                return;
+            }
+            lastScanTime = now;
+
+            try {
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                context.drawImage(videoElement, 0, 0);
+
+                const barcodes = await detector.detect(canvas);
+                if (barcodes.length > 0) {
+                    const barcode = barcodes[0];
+                    console.log('Barcode detected:', barcode.rawValue, barcode.format);
+                    if (barcode.format === 'ean_13' || barcode.format === 'ean_8') {
+                        handleScanResult(barcode.rawValue);
+                        return; // スキャン成功したら停止
+                    }
+                }
+            } catch (error) {
+                console.warn('Barcode detection error:', error);
+            }
+
+            requestAnimationFrame(scanLoop);
+        };
+
+        scanLoop();
+
+        return {
+            stop: () => {
+                isScanning = false;
+            }
+        };
+    }
+
+    // ZXing libraryの初期化（フォールバック）
+    async function ensureBarcodeReader() {
+        if (barcodeReader) {
+            return barcodeReader;
+        }
+        if (!barcodeModule) {
+            try {
+                // 最新の安定版を使用
+                barcodeModule = await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm');
+                console.log('ZXing library loaded');
+            } catch (error) {
+                console.error('Failed to load ZXing library:', error);
+                throw error;
+            }
+        }
+        
+        const hints = new Map();
+        const formats = [
+            barcodeModule.BarcodeFormat.EAN_13,
+            barcodeModule.BarcodeFormat.EAN_8,
+            barcodeModule.BarcodeFormat.CODE_128
+        ];
+        hints.set(barcodeModule.DecodeHintType.POSSIBLE_FORMATS, formats);
+        hints.set(barcodeModule.DecodeHintType.TRY_HARDER, true);
+        
+        barcodeReader = new barcodeModule.BrowserMultiFormatReader(hints);
+        console.log('ZXing BarcodeReader initialized');
+        return barcodeReader;
+    }
+
+    // カメラストリームの開始（改善版）
+    async function startCameraStream() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('カメラAPIがサポートされていません');
+        }
+
+        const constraints = {
+            video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                frameRate: { ideal: 30 }
+            }
+        };
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('Camera stream started');
+            return stream;
+        } catch (error) {
+            // 環境カメラが使えない場合はフロントカメラにフォールバック
+            if (error.name === 'OverconstrainedError') {
+                const fallbackConstraints = {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                console.log('Camera stream started (fallback mode)');
+                return stream;
+            }
+            throw error;
+        }
+    }
+
+    // ISBN正規化の改善版
     function normalizeIsbn(rawValue) {
         if (!rawValue) {
             return null;
         }
-        const digits = rawValue.replace(/[^0-9Xx]/g, '');
-        if (digits.length === 13 || digits.length === 10) {
-            return digits.toUpperCase();
+        
+        // 数字とX（ISBN-10のチェックディジット）のみを抽出
+        const digits = rawValue.replace(/[^0-9Xx]/g, '').toUpperCase();
+        
+        // EAN-13 (ISBN-13) または EAN-8をサポート
+        if (digits.length === 13) {
+            // ISBN-13として扱う（最初の3桁が978または979であることを確認）
+            if (digits.startsWith('978') || digits.startsWith('979')) {
+                return digits;
+            }
+            // 通常のEAN-13としても受け入れる
+            return digits;
+        } else if (digits.length === 10) {
+            // ISBN-10
+            return digits;
+        } else if (digits.length === 8) {
+            // EAN-8（短縮版）
+            return digits;
         }
+        
         return null;
     }
 
@@ -782,26 +954,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function ensureBarcodeReader() {
-        if (barcodeReader) {
-            return barcodeReader;
-        }
-        if (!barcodeModule) {
-            barcodeModule = await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/+esm');
-        }
-        const hints = new Map();
-        const formats = [barcodeModule.BarcodeFormat.EAN_13, barcodeModule.BarcodeFormat.QR_CODE];
-        hints.set(barcodeModule.DecodeHintType.POSSIBLE_FORMATS, formats);
-        
-        barcodeReader = new barcodeModule.BrowserMultiFormatReader(hints);
-        return barcodeReader;
-    }
-
     async function openScanModal() {
         if (!scanModal) {
             return;
         }
-        if (!window.isSecureContext && location.hostname != 'localhost') {
+        if (!window.isSecureContext && location.hostname !== 'localhost') {
             setScanStatus('HTTPS もしくは localhost でアクセスするとカメラが利用できます。手動入力をご利用ください。');
             scanModal.classList.remove('hidden');
             document.body.classList.add('modal-open');
@@ -832,42 +989,106 @@ document.addEventListener('DOMContentLoaded', () => {
         isProcessingScan = false;
     }
 
+    // バーコードスキャンの開始（統合版）
     async function startBarcodeScan() {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             setScanStatus('ブラウザがカメラアクセスに対応していません。手動入力をご利用ください。');
             return;
         }
+
+        setScanStatus('カメラを初期化しています…');
+        let stream = null;
+
         try {
-            const reader = await ensureBarcodeReader();
-            const devices = await barcodeModule.BrowserMultiFormatReader.listVideoInputDevices();
-            let selectedDeviceId = null;
-            if (devices && devices.length > 0) {
-                const backCamera = devices.find(device => /back|rear/gi.test(device.label));
-                selectedDeviceId = backCamera ? backCamera.deviceId : devices[0].deviceId;
+            // BarcodeDetector APIのサポートを確認
+            const hasNativeSupport = await checkBarcodeDetectorSupport();
+            
+            // カメラストリームを開始
+            stream = await startCameraStream();
+            
+            if (scanVideo) {
+                scanVideo.srcObject = stream;
+                scanVideo.setAttribute('playsinline', 'true');
+                scanVideo.setAttribute('muted', 'true');
+                
+                // ビデオが再生可能になるまで待機
+                await new Promise((resolve) => {
+                    scanVideo.onloadedmetadata = () => {
+                        scanVideo.play().then(resolve).catch(resolve);
+                    };
+                });
             }
-            const constraints = selectedDeviceId
-                ? { video: { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
-                : { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } };
-            const useConstraints = typeof reader.decodeFromConstraints === 'function';
-            const callback = (result, error) => {
-                if (result) {
-                    const value = typeof result.getText === 'function' ? result.getText() : result.text;
-                    handleScanResult(value);
-                } else if (error) {
-                    const isEmptyFrame = barcodeModule && barcodeModule.NotFoundException && error instanceof barcodeModule.NotFoundException;
-                    if (!isEmptyFrame) {
-                        console.warn('Barcode scan error', error);
+
+            // BarcodeDetector APIを優先的に使用
+            if (hasNativeSupport && scanVideo) {
+                setScanStatus('バーコードが映るように端末をかざしてください。');
+                const detectorControls = await startBarcodeDetectorScan(scanVideo);
+                
+                scanControls = {
+                    stop: () => {
+                        if (detectorControls) {
+                            detectorControls.stop();
+                        }
+                        if (stream) {
+                            stream.getTracks().forEach(track => track.stop());
+                        }
+                        if (scanVideo) {
+                            scanVideo.srcObject = null;
+                        }
                     }
-                }
-            };
-            if (useConstraints) {
-                scanControls = await reader.decodeFromConstraints(constraints, scanVideo, callback);
+                };
             } else {
-                scanControls = await reader.decodeFromVideoDevice(selectedDeviceId || undefined, scanVideo, callback);
+                // ZXingをフォールバックとして使用
+                setScanStatus('バーコードが映るように端末をかざしてください。');
+                const reader = await ensureBarcodeReader();
+                
+                const handleResult = (result, error) => {
+                    if (result) {
+                        const value = typeof result.getText === 'function' 
+                            ? result.getText() 
+                            : result.text;
+                        console.log('Barcode scanned (ZXing):', value);
+                        handleScanResult(value);
+                    } else if (error) {
+                        const isEmptyFrame = barcodeModule && 
+                            barcodeModule.NotFoundException && 
+                            error instanceof barcodeModule.NotFoundException;
+                        if (!isEmptyFrame) {
+                            console.warn('Barcode scan error:', error);
+                        }
+                    }
+                };
+
+                if (typeof reader.decodeFromVideoElementContinuously === 'function') {
+                    reader.decodeFromVideoElementContinuously(scanVideo, handleResult);
+                } else {
+                    reader.decodeFromVideoElement(scanVideo, handleResult);
+                }
+
+                scanControls = {
+                    stop: () => {
+                        reader.reset();
+                        if (stream) {
+                            stream.getTracks().forEach(track => track.stop());
+                        }
+                        if (scanVideo) {
+                            scanVideo.srcObject = null;
+                        }
+                    }
+                };
             }
-            setScanStatus('バーコードが映るように端末をかざしてください。');
+
             isProcessingScan = false;
+            
         } catch (error) {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            if (scanVideo) {
+                scanVideo.srcObject = null;
+            }
+            scanControls = null;
+
             if (error && error.name === 'NotAllowedError') {
                 setScanStatus('カメラへのアクセスが許可されませんでした。ブラウザの設定を確認してください。');
             } else if (error && (error.name === 'NotFoundError' || error.name === 'OverconstrainedError')) {
@@ -875,11 +1096,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 setScanStatus('カメラを起動できませんでした。手動入力をご利用ください。');
             }
+            
             isProcessingScan = false;
-            console.error('Failed to start barcode scanning', error);
+            console.error('Failed to start barcode scanning:', error);
         }
     }
-
 
     function stopBarcodeScan() {
         if (barcodeReader) {
@@ -900,40 +1121,75 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // スキャン結果の処理（改善版）
     async function handleScanResult(rawValue) {
         if (!rawValue || isProcessingScan) {
             return;
         }
+        
         const normalized = normalizeIsbn(rawValue);
         if (!normalized) {
-            setScanStatus('コードを読み取りましたが、ISBNとして認識できませんでした。');
+            setScanStatus(`コードを読み取りましたが、ISBNとして認識できませんでした。`);
+            console.log('Invalid ISBN format:', rawValue);
             return;
         }
+        
         isProcessingScan = true;
-        setScanStatus(`ISBN ${normalized} を取得しました。書誌情報を検索しています…`);
+        setScanStatus(`ISBN ${normalized} を取得しました。書籍情報を検索しています…`);
+        console.log('Valid ISBN detected:', normalized);
+        
+        // スキャンを停止
         stopBarcodeScan();
+        
+        // フォームにISBNを設定
         prefillBookFormWithData({ isbn: normalized });
-        const bookData = await fetchBookDataByIsbn(normalized);
-        if (bookData) {
-            prefillBookFormWithData(bookData);
-            closeScanModal();
-            if (bookModal.classList.contains('hidden')) {
-                openBookModal();
+        
+        // 書籍情報を取得
+        try {
+            const bookData = await fetchBookDataByIsbn(normalized);
+            if (bookData) {
+                prefillBookFormWithData(bookData);
+                closeScanModal();
+                if (bookModal.classList.contains('hidden')) {
+                    openBookModal();
+                }
+                setTimeout(() => bookTitleInput.focus(), 0);
+                setScanStatus('書籍情報を取得しました。');
+            } else {
+                setScanStatus(`ISBN ${normalized} の書籍情報を取得できませんでした。手動で入力してください。`);
+                isProcessingScan = false;
             }
-            setTimeout(() => bookTitleInput.focus(), 0);
-        } else {
-            setScanStatus(`ISBN ${normalized} の書誌情報を取得できませんでした。手動で入力してください。`);
+        } catch (error) {
+            console.error('Failed to fetch book data:', error);
+            setScanStatus('書籍情報の取得中にエラーが発生しました。手動で入力してください。');
             isProcessingScan = false;
         }
     }
 
     async function fetchBookDataByIsbn(isbn) {
         try {
-            const response = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
-            if (!response.ok) {
+            // まずGoogle Books APIを試す
+            const googleResponse = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+            if (googleResponse.ok) {
+                const googleData = await googleResponse.json();
+                if (googleData.items && googleData.items.length > 0) {
+                    const bookInfo = googleData.items[0].volumeInfo;
+                    return {
+                        title: bookInfo.title || '',
+                        author: bookInfo.authors ? bookInfo.authors.join(', ') : '著者未設定',
+                        cover: bookInfo.imageLinks?.thumbnail?.replace('http:', 'https:') || 
+                               bookInfo.imageLinks?.smallThumbnail?.replace('http:', 'https:') || '',
+                        isbn
+                    };
+                }
+            }
+
+            // Google Books APIで見つからない場合はOpen Libraryを試す
+            const openLibResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+            if (!openLibResponse.ok) {
                 return null;
             }
-            const data = await response.json();
+            const data = await openLibResponse.json();
             let authorName = '';
             if (Array.isArray(data.authors) && data.authors.length > 0 && data.authors[0].key) {
                 try {
@@ -979,6 +1235,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ==================== イベントハンドラー ====================
+
     function handleDeleteMemo(bookId, memoId) {
         if (!bookId || !memoId) {
             return;
@@ -987,7 +1245,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!book) {
             return;
         }
-        if (!confirm('このメモを削除しますか？')) {
+        if (!confirm('このメモを削除しますか?')) {
             return;
         }
         book.memos = book.memos.filter(memo => memo.id !== memoId);
@@ -1026,8 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!book) {
             return;
         }
-        if (!confirm(`「${book.title}」を削除しますか？
-登録済みのメモもすべて削除されます。`)) {
+        if (!confirm(`「${book.title}」を削除しますか?\n登録済みのメモもすべて削除されます。`)) {
             return;
         }
         delete appData.books[bookId];
@@ -1084,6 +1341,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderBookDetail();
         showScreen('book-detail-screen');
     }
+
+    // ==================== イベントリスナー ====================
 
     if (bookListContainer) {
         bookListContainer.addEventListener('click', event => {
@@ -1312,6 +1571,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ==================== 初期化 ====================
+
     function init() {
         loadData();
         renderBookshelf();
@@ -1324,6 +1585,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
     init();
 });
-
-
-
