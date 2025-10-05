@@ -839,46 +839,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const reader = await ensureBarcodeReader();
-            const constraints = { 
-                video: { 
-                    facingMode: 'environment'
-                } 
-            };
-            
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            scanVideo.srcObject = stream;
-            
-            // メタデータが読み込まれるのを待ってから再生
-            scanVideo.onloadedmetadata = () => {
-                scanVideo.play();
-                setScanStatus('バーコードが映るように端末をかざしてください。');
-                isProcessingScan = false;
-
-                // decodeFromVideoElementは継続的にスキャンするため、ここで呼び出す
-                reader.decodeFromVideoElement(scanVideo, (result, error) => {
-                    if (result) {
-                        const value = typeof result.getText === 'function' ? result.getText() : result.text;
-                        handleScanResult(value);
-                    } else if (error && barcodeModule && !(error instanceof barcodeModule.NotFoundException)) {
-                        // NotFoundExceptionはバーコードが見つからないだけなので、エラーとして扱わない
+            const devices = await barcodeModule.BrowserMultiFormatReader.listVideoInputDevices();
+            let selectedDeviceId = null;
+            if (devices && devices.length > 0) {
+                const backCamera = devices.find(device => /back|rear/gi.test(device.label));
+                selectedDeviceId = backCamera ? backCamera.deviceId : devices[0].deviceId;
+            }
+            const constraints = selectedDeviceId
+                ? { video: { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
+                : { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } };
+            const useConstraints = typeof reader.decodeFromConstraints === 'function';
+            const callback = (result, error) => {
+                if (result) {
+                    const value = typeof result.getText === 'function' ? result.getText() : result.text;
+                    handleScanResult(value);
+                } else if (error) {
+                    const isEmptyFrame = barcodeModule && barcodeModule.NotFoundException && error instanceof barcodeModule.NotFoundException;
+                    if (!isEmptyFrame) {
                         console.warn('Barcode scan error', error);
                     }
-                });
-            };
-
-            // ストリームを停止するための参照を保持
-            scanControls = {
-                stop: () => {
-                    stream.getTracks().forEach(track => track.stop());
-                    scanVideo.srcObject = null;
                 }
             };
-
+            if (useConstraints) {
+                scanControls = await reader.decodeFromConstraints(constraints, scanVideo, callback);
+            } else {
+                scanControls = await reader.decodeFromVideoDevice(selectedDeviceId || undefined, scanVideo, callback);
+            }
+            setScanStatus('バーコードが映るように端末をかざしてください。');
+            isProcessingScan = false;
         } catch (error) {
             if (error && error.name === 'NotAllowedError') {
                 setScanStatus('カメラへのアクセスが許可されませんでした。ブラウザの設定を確認してください。');
-            } else if (error && error.name === 'NotFoundError' || error.name === 'OverconstrainedError') {
-                setScanStatus('利用できる背面カメラが見つかりませんでした。手動入力をご利用ください。');
+            } else if (error && (error.name === 'NotFoundError' || error.name === 'OverconstrainedError')) {
+                setScanStatus('利用できるカメラが見つかりませんでした。手動入力をご利用ください。');
             } else {
                 setScanStatus('カメラを起動できませんでした。手動入力をご利用ください。');
             }
@@ -886,6 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Failed to start barcode scanning', error);
         }
     }
+
 
     function stopBarcodeScan() {
         if (barcodeReader) {
