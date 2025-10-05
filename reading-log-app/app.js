@@ -835,15 +835,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const reader = await ensureBarcodeReader();
-            const devices = await barcodeModule.BrowserMultiFormatReader.listVideoInputDevices();
-            let selectedDeviceId = null;
-            if (devices && devices.length > 0) {
-                const backCamera = devices.find(device => /back|rear/gi.test(device.label));
-                selectedDeviceId = backCamera ? backCamera.deviceId : devices[0].deviceId;
-            }
-            const constraints = selectedDeviceId
-                ? { video: { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
-                : { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } };
+            const constraints = { 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 1280 }, 
+                    height: { ideal: 720 } 
+                } 
+            };
             scanControls = await reader.decodeFromConstraints(constraints, scanVideo, (result, error) => {
                 if (result) {
                     const value = typeof result.getText === 'function' ? result.getText() : result.text;
