@@ -787,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return barcodeReader;
         }
         if (!barcodeModule) {
-            barcodeModule = await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.3/+esm');
+            barcodeModule = await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/+esm');
         }
         const hints = new Map();
         const formats = [barcodeModule.BarcodeFormat.EAN_13, barcodeModule.BarcodeFormat.QR_CODE];
