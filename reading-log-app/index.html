@@ -84,8 +84,12 @@
                 </div>
                 <label class="field">
                     <span class="field-label">タイトル</span>
-                    <input type="text" id="book-title-input" required placeholder="書籍タイトル">
+                    <div class="input-with-action">
+                        <input type="text" id="book-title-input" required placeholder="書籍タイトル">
+                        <button type="button" id="book-search-button" class="secondary">タイトルを検索</button>
+                    </div>
                 </label>
+                <div id="book-search-results" class="book-search-results" hidden></div>
                 <label class="field">
                     <span class="field-label">著者</span>
                     <input type="text" id="book-author-input" placeholder="著者名">

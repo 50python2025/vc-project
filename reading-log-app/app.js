@@ -41,6 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookCoverUrlInput = document.getElementById('book-cover-url-input');
     const bookCoverInput = document.getElementById('book-cover-input');
     const bookCoverPreview = document.getElementById('book-cover-preview');
+    const bookSearchButton = document.getElementById('book-search-button');
+    const bookSearchResults = document.getElementById('book-search-results');
     const bookScanButton = document.getElementById('book-scan-button');
     const scanModal = document.getElementById('scan-modal');
     const scanModalBackdrop = document.getElementById('scan-modal-backdrop');
@@ -59,6 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let scanControls = null;
     let isProcessingScan = false;
     let useBarcodeDetectorAPI = false;
+    const bookSearchState = { results: [], isLoading: false };
+
     let barcodeDetector = null;
 
     const memoFormState = {
@@ -701,6 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openBookModal() {
         bookModal.classList.remove('hidden');
         document.body.classList.add('modal-open');
+        clearBookSearchResults();
         setTimeout(() => bookTitleInput.focus(), 0);
     }
 
@@ -717,6 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bookForm.reset();
         bookCoverDraft = null;
         updateBookCoverPreview('');
+        clearBookSearchResults();
     }
 
     function handleBookFormSubmit(event) {
@@ -921,6 +927,84 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ISBN正規化の改善版
+    async function searchBooksByKeyword(query) {
+        try {
+            const url = new URL('https://openlibrary.org/search.json');
+            url.searchParams.set('title', query);
+            url.searchParams.set('limit', '10');
+            url.searchParams.set('fields', 'title,author_name,isbn,cover_i,first_publish_year');
+            const response = await fetch(url.toString(), { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`Search request failed with status ${response.status}`);
+            }
+            const data = await response.json();
+            if (!data.docs || !Array.isArray(data.docs)) {
+                return [];
+            }
+            return data.docs.map(doc => {
+                const isbnList = Array.isArray(doc.isbn) ? doc.isbn : [];
+                const candidateIsbn = isbnList.find(code => code && (code.length === 13 || code.length === 10));
+                const coverId = typeof doc.cover_i === 'number' && doc.cover_i > 0 ? doc.cover_i : null;
+                return {
+                    title: doc.title || '',
+                    author: Array.isArray(doc.author_name) ? doc.author_name.join(', ') : '',
+                    isbn: candidateIsbn || '',
+                    cover: coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : '',
+                    year: doc.first_publish_year ? String(doc.first_publish_year) : ''
+                };
+            }).filter(item => item.title);
+        } catch (error) {
+            console.error('Failed to search books', error);
+            throw error;
+        }
+    }
+
+    function renderBookSearchResults(results, query) {
+        if (!bookSearchResults) {
+            return;
+        }
+        if (!results || results.length === 0) {
+            bookSearchResults.innerHTML = `<p class="placeholder">「${escapeHtml(query)}」に一致する結果が見つかりませんでした。</p>`;
+            bookSearchResults.hidden = false;
+            return;
+        }
+        const items = results.map((item, index) => {
+            const safeTitle = escapeHtml(item.title);
+            const safeAuthor = escapeHtml(item.author || '著者情報なし');
+            const metaParts = [safeAuthor];
+            if (item.year) {
+                metaParts.push(`初版: ${escapeHtml(item.year)}`);
+            }
+            const metaText = metaParts.filter(Boolean).join(' / ');
+            return `
+                <button type="button" class="book-search-result" data-search-index="${index}">
+                    <span class="book-search-result-title">${safeTitle}</span>
+                    <span class="book-search-result-meta">${metaText}</span>
+                </button>
+            `;
+        }).join('');
+        bookSearchResults.innerHTML = items;
+        bookSearchResults.hidden = false;
+    }
+
+    function clearBookSearchResults() {
+        if (!bookSearchResults) {
+            return;
+        }
+        bookSearchResults.innerHTML = '';
+        bookSearchResults.hidden = true;
+        bookSearchState.results = [];
+        bookSearchState.isLoading = false;
+    }
+
+    function setBookSearchLoading(message) {
+        if (!bookSearchResults) {
+            return;
+        }
+        bookSearchResults.innerHTML = `<p class="placeholder">${escapeHtml(message)}</p>`;
+        bookSearchResults.hidden = false;
+    }
+
     function normalizeIsbn(rawValue) {
         if (!rawValue) {
             return null;
@@ -1483,6 +1567,49 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = bookCoverUrlInput.value.trim();
         updateBookCoverPreview(url);
     });
+
+    if (bookSearchButton) {
+        bookSearchButton.addEventListener('click', async () => {
+            const query = bookTitleInput.value.trim();
+            if (!query) {
+                alert('検索するタイトルを入力してください。');
+                return;
+            }
+            try {
+                bookSearchState.isLoading = true;
+                setBookSearchLoading('検索中...');
+                const results = await searchBooksByKeyword(query);
+                bookSearchState.results = results;
+                bookSearchState.isLoading = false;
+                renderBookSearchResults(results, query);
+            } catch (error) {
+                bookSearchState.isLoading = false;
+                if (bookSearchResults) {
+                    bookSearchResults.innerHTML = '<p class="placeholder">検索中にエラーが発生しました。時間をおいて再度お試しください。</p>';
+                    bookSearchResults.hidden = false;
+                }
+            }
+        });
+    }
+
+    if (bookSearchResults) {
+        bookSearchResults.addEventListener('click', event => {
+            const button = event.target.closest('.book-search-result');
+            if (!button) {
+                return;
+            }
+            const index = Number(button.dataset.searchIndex);
+            const item = Number.isNaN(index) ? null : bookSearchState.results[index];
+            if (!item) {
+                return;
+            }
+            prefillBookFormWithData(item);
+            if (item.title) {
+                bookTitleInput.value = item.title;
+            }
+            clearBookSearchResults();
+        });
+    }
 
     if (bookScanButton) {
         bookScanButton.addEventListener('click', () => {
