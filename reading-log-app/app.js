@@ -929,19 +929,48 @@ document.addEventListener('DOMContentLoaded', () => {
     // ISBN正規化の改善版
     async function searchBooksByKeyword(query) {
         try {
-            const url = new URL('https://openlibrary.org/search.json');
-            url.searchParams.set('title', query);
-            url.searchParams.set('limit', '10');
-            url.searchParams.set('fields', 'title,author_name,isbn,cover_i,first_publish_year');
-            const response = await fetch(url.toString(), { cache: 'no-cache' });
-            if (!response.ok) {
-                throw new Error(`Search request failed with status ${response.status}`);
+            // 1. Google Books APIで検索
+            const googleUrl = new URL('https://www.googleapis.com/books/v1/volumes');
+            googleUrl.searchParams.set('q', `intitle:${query}`);
+            googleUrl.searchParams.set('langRestrict', 'ja');
+            googleUrl.searchParams.set('maxResults', '10');
+            googleUrl.searchParams.set('printType', 'books');
+
+            const googleResponse = await fetch(googleUrl.toString());
+            if (googleResponse.ok) {
+                const googleData = await googleResponse.json();
+                if (googleData.items && googleData.items.length > 0) {
+                    return googleData.items.map(item => {
+                        const info = item.volumeInfo;
+                        const isbn13 = info.industryIdentifiers?.find(i => i.type === 'ISBN_13')?.identifier;
+                        const isbn10 = info.industryIdentifiers?.find(i => i.type === 'ISBN_10')?.identifier;
+                        const cover = info.imageLinks?.thumbnail?.replace('http:', 'https:') || 
+                                      info.imageLinks?.smallThumbnail?.replace('http:', 'https:') || '';
+                        return {
+                            title: info.title || '',
+                            author: info.authors ? info.authors.join(', ') : '',
+                            isbn: isbn13 || isbn10 || '',
+                            cover: cover,
+                            year: info.publishedDate ? info.publishedDate.substring(0, 4) : ''
+                        };
+                    }).filter(item => item.title);
+                }
             }
-            const data = await response.json();
-            if (!data.docs || !Array.isArray(data.docs)) {
+
+            // 2. Open Library API (フォールバック)
+            const openLibUrl = new URL('https://openlibrary.org/search.json');
+            openLibUrl.searchParams.set('title', query);
+            openLibUrl.searchParams.set('limit', '10');
+            openLibUrl.searchParams.set('fields', 'title,author_name,isbn,cover_i,first_publish_year');
+            const openLibResponse = await fetch(openLibUrl.toString(), { cache: 'no-cache' });
+            if (!openLibResponse.ok) {
+                throw new Error(`Search request failed with status ${openLibResponse.status}`);
+            }
+            const openLibData = await openLibResponse.json();
+            if (!openLibData.docs || !Array.isArray(openLibData.docs)) {
                 return [];
             }
-            return data.docs.map(doc => {
+            return openLibData.docs.map(doc => {
                 const isbnList = Array.isArray(doc.isbn) ? doc.isbn : [];
                 const candidateIsbn = isbnList.find(code => code && (code.length === 13 || code.length === 10));
                 const coverId = typeof doc.cover_i === 'number' && doc.cover_i > 0 ? doc.cover_i : null;
@@ -953,6 +982,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     year: doc.first_publish_year ? String(doc.first_publish_year) : ''
                 };
             }).filter(item => item.title);
+
         } catch (error) {
             console.error('Failed to search books', error);
             throw error;

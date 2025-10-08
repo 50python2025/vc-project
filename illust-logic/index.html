@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Illust Logic 10x10</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="hero">
+            <div class="brand">ILLUST LOGIC</div>
+            <div class="hero-copy">
+                <h1>10x10 ピクセルアートパズル</h1>
+                <p>数字のヒントを頼りに、隠された10種類のアートを完成させましょう。</p>
+            </div>
+            <div class="hero-meta">
+                <div class="meta-card">
+                    <span class="label">現在のパズル</span>
+                    <span class="value" id="puzzle-title">-</span>
+                </div>
+                <div class="meta-card">
+                    <span class="label">難易度</span>
+                    <span class="value" id="puzzle-difficulty">-</span>
+                </div>
+                <div class="meta-card">
+                    <span class="label">進捗</span>
+                    <span class="value" id="puzzle-progress">0%</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="layout">
+            <aside class="control-panel">
+                <section class="toolkit">
+                    <h2>操作ツール</h2>
+                    <div class="tool-buttons">
+                        <button class="tool-button active" data-tool="fill" id="tool-fill">塗る</button>
+                        <button class="tool-button" data-tool="cross" id="tool-cross">バツ</button>
+                        <button class="tool-button" data-tool="inspect" id="tool-inspect">消しゴム</button>
+                    </div>
+                    <p class="tip">・左クリックで選択中のツールを使用<br>・右クリックで逆のツール<br>・ドラッグで連続操作</p>
+                </section>
+
+                <section class="settings">
+                    <h2>ビュー設定</h2>
+                    <label class="slider-label">セルサイズ <span id="cell-size-value"></span></label>
+                    <input type="range" id="cell-size-slider" min="8" max="40" step="1" value="28">
+                    <label class="slider-label">ハイライト濃度 <span id="highlight-value"></span></label>
+                    <input type="range" id="highlight-slider" min="0" max="1" step="0.1" value="0.4">
+                </section>
+
+                <section class="checklist">
+                    <h2>プレイ情報</h2>
+                    <ul>
+                        <li id="filled-count">塗りマス: 0</li>
+                        <li id="cross-count">バツ: 0</li>
+                        <li id="mistake-count">ミス: 0</li>
+                        <li id="timer-display">タイマー: 00:00</li>
+                    </ul>
+                    <div class="checklist-actions">
+                        <button class="primary-button" id="start-button">ゲーム開始</button>
+                        <button class="secondary-button" id="reset-button" style="display: none;">このパズルをやり直す</button>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="board-panel">
+                <div class="board-toolbar">
+                    <button class="primary-button" id="prev-puzzle">◀ 前へ</button>
+                    <button class="primary-button" id="next-puzzle">次へ ▶</button>
+                    <button class="ghost-button" id="reveal-toggle">ヒントラインを点灯</button>
+                </div>
+                <div class="board-container">
+                    <div class="board-surface">
+                        <canvas id="corner-canvas"></canvas>
+                        <canvas id="col-hints-canvas"></canvas>
+                        <canvas id="row-hints-canvas"></canvas>
+                        <canvas id="board-canvas"></canvas>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <span id="status-text">ようこそ！最初のピクセルを塗ってみましょう。</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="overlay hidden" id="victory-overlay">
+        <div class="overlay-card">
+            <h2 id="victory-title">クリア！</h2>
+            <p id="victory-message">次のアートへ進みましょう。</p>
+            <button class="primary-button" id="continue-button">次のパズルへ</button>
+        </div>
+    </div>
+
+    <div class="toast hidden" id="toast"></div>
+
+    <script src="app.js?v=1"></script>
+</body>
+</html>
