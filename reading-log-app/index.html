@@ -27,12 +27,12 @@
             <h2 id="memo-form-title">メモを追加</h2>
             <form id="memo-form">
                 <label class="field">
-                    <span class="field-label">テキスト</span>
-                    <textarea id="memo-text" placeholder="気づきや要点を自由に記録" rows="5"></textarea>
+                    <span class="field-label">テキスト <small>(Markdown形式で記述できます)</small></span>
+                    <textarea id="memo-text" placeholder="気づきや要点を自由に記録&#10;&#10;Markdown記法が使えます:&#10;**太字** *斜体* `コード` [リンク](URL)&#10;- リスト&#10;1. 番号付きリスト" rows="5"></textarea>
                 </label>
                 <label class="field">
-                    <span class="field-label">引用</span>
-                    <textarea id="memo-quote" placeholder="特に重要な一節を引用として記録" rows="3"></textarea>
+                    <span class="field-label">引用 <small>(Markdown形式で記述できます)</small></span>
+                    <textarea id="memo-quote" placeholder="特に重要な一節を引用として記録&#10;&#10;Markdown記法が使えます" rows="3"></textarea>
                 </label>
                 <div class="field">
                     <span class="field-label">写真</span>
@@ -131,6 +131,7 @@
             </div>
         </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     <script type="module" src="app.js"></script>
 </body>
 </html>

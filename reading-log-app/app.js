@@ -99,6 +99,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return escapeHtml(value).replace(/\r?\n/g, '<br>');
     }
 
+    function toMarkdownHtml(value) {
+        if (!value) {
+            return '';
+        }
+        if (typeof marked === 'undefined' || typeof marked.parse !== 'function') {
+            return toDisplayText(value);
+        }
+        try {
+            return marked.parse(value, { breaks: true, gfm: true });
+        } catch (error) {
+            console.warn('Markdown parsing failed, falling back to plain text', error);
+            return toDisplayText(value);
+        }
+    }
+
     function formatDateTime(timestamp) {
         if (!timestamp) {
             return '';
@@ -353,10 +368,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function buildMemoBodyHTML(memo, options = {}) {
         const blocks = [];
         if (memo.text) {
-            blocks.push(`<p class="memo-text">${toDisplayText(memo.text)}</p>`);
+            blocks.push(`<div class="memo-text markdown-content">${toMarkdownHtml(memo.text)}</div>`);
         }
         if (memo.quote) {
-            blocks.push(`<blockquote class="memo-quote"><p>${toDisplayText(memo.quote)}</p></blockquote>`);
+            blocks.push(`<blockquote class="memo-quote markdown-content">${toMarkdownHtml(memo.quote)}</blockquote>`);
         }
         if (memo.photos && memo.photos.length) {
             const photosHtml = memo.photos.map(photo => {
