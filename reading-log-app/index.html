@@ -10,9 +10,20 @@
 <body>
     <header>
         <h1 id="header-title">本棚</h1>
-        <button id="search-button" class="icon-button" aria-label="検索画面を開く">
-            <span aria-hidden="true">🔍</span>
-        </button>
+        <div class="header-actions">
+            <select id="status-filter" aria-label="読書状況で絞り込み" style="margin-right: 8px; padding: 4px; border-radius: 4px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155;">
+                <option value="all">すべて</option>
+                <option value="reading">読書中</option>
+                <option value="unread">未読</option>
+                <option value="completed">読了</option>
+            </select>
+            <button id="search-button" class="icon-button" aria-label="検索画面を開く">
+                <span aria-hidden="true">🔍</span>
+            </button>
+            <button id="settings-button" class="icon-button" aria-label="設定を開く">
+                <span aria-hidden="true">⚙️</span>
+            </button>
+        </div>
     </header>
     <main id="app-container">
         <section id="bookshelf-screen" class="screen active" aria-labelledby="header-title">
@@ -99,6 +110,14 @@
                     <input type="text" id="book-isbn-input" placeholder="13桁もしくは10桁の番号">
                 </label>
                 <label class="field">
+                    <span class="field-label">読書状況</span>
+                    <select id="book-status-input">
+                        <option value="unread">未読</option>
+                        <option value="reading">読書中</option>
+                        <option value="completed">読了</option>
+                    </select>
+                </label>
+                <label class="field">
                     <span class="field-label">カバー画像URL</span>
                     <input type="url" id="book-cover-url-input" placeholder="画像のURLを入力（任意）">
                 </label>
@@ -129,6 +148,26 @@
                 <button type="button" id="scan-retry-button" class="secondary">再スキャン</button>
                 <button type="button" id="scan-cancel-button" class="secondary">キャンセル</button>
             </div>
+        </div>
+    </div>
+    <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+        <div class="modal-backdrop" id="settings-modal-backdrop"></div>
+        <div class="modal-panel">
+            <button type="button" class="modal-close" id="settings-modal-close" aria-label="閉じる">×</button>
+            <h2 id="settings-modal-title">設定</h2>
+            <section class="settings-section">
+                <h3>データ管理</h3>
+                <p class="settings-desc">登録した書籍やメモのデータをバックアップ・復元できます。</p>
+                <div class="settings-actions">
+                    <button type="button" id="export-data-button" class="secondary">
+                        <span class="icon">📤</span> データを書き出し (JSON)
+                    </button>
+                    <button type="button" id="import-data-button" class="secondary">
+                        <span class="icon">📥</span> データを読み込み
+                    </button>
+                    <input type="file" id="import-file-input" accept=".json" hidden>
+                </div>
+            </section>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>

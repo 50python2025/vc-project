@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookTitleInput = document.getElementById('book-title-input');
     const bookAuthorInput = document.getElementById('book-author-input');
     const bookIsbnInput = document.getElementById('book-isbn-input');
+    const bookStatusInput = document.getElementById('book-status-input');
     const bookCoverUrlInput = document.getElementById('book-cover-url-input');
     const bookCoverInput = document.getElementById('book-cover-input');
     const bookCoverPreview = document.getElementById('book-cover-preview');
@@ -51,6 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const scanStatus = document.getElementById('scan-status');
     const scanRetryButton = document.getElementById('scan-retry-button');
     const scanCancelButton = document.getElementById('scan-cancel-button');
+
+    const settingsButton = document.getElementById('settings-button');
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsModalClose = document.getElementById('settings-modal-close');
+    const settingsModalBackdrop = document.getElementById('settings-modal-backdrop');
+    const exportDataButton = document.getElementById('export-data-button');
+    const importDataButton = document.getElementById('import-data-button');
+    const importFileInput = document.getElementById('import-file-input');
+    const statusFilter = document.getElementById('status-filter');
 
     let appData = { books: {} };
     let currentBookId = null;
@@ -321,18 +331,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
+    function getStatusText(status) {
+        switch (status) {
+            case 'reading':
+                return '読書中';
+            case 'completed':
+                return '読了';
+            case 'unread':
+            default:
+                return '未読';
+        }
+    }
+
     function renderBookshelf() {
         if (!bookListContainer) {
             return;
         }
-        const books = Object.values(appData.books)
-            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        
+        let books = Object.values(appData.books);
+        
+        // Filter by status
+        if (statusFilter) {
+            const filterValue = statusFilter.value;
+            if (filterValue !== 'all') {
+                books = books.filter(book => book.status === filterValue);
+            }
+        }
+
+        books.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         if (!books.length) {
             bookListContainer.innerHTML = '';
-            renderBookshelfEmptyState();
+            // Only show empty state if there are truly no books, not just filtered out
+            if (Object.keys(appData.books).length === 0) {
+                renderBookshelfEmptyState();
+            } else {
+                // Show "no matches" message
+                 bookListContainer.innerHTML = '<p class="placeholder">条件に一致する書籍がありません。</p>';
+                 if (bookshelfEmptyNotice) bookshelfEmptyNotice.hidden = true;
+            }
             return;
         }
+        
+        if (bookshelfEmptyNotice) bookshelfEmptyNotice.hidden = true;
 
         bookListContainer.innerHTML = books.map(book => {
             const memoCount = book.memos.length;
@@ -340,10 +381,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const tagsHtml = tagList.length
                 ? `<div class="card-tags">${tagList.map(tag => `<span class="tag-chip static">#${escapeHtml(tag)}</span>`).join('')}</div>`
                 : '';
+            const statusText = getStatusText(book.status);
+            const statusClass = `status-badge status-${book.status || 'unread'}`;
+
             return `
                 <article class="book-item" data-book-id="${book.id}">
-                    <div class="book-cover">
-                        <img src="${escapeHtml(book.cover || defaultCover)}" alt="${escapeHtml(book.title)}の表紙">
+                    <div class="book-cover-container" style="position: relative;">
+                        <img src="${escapeHtml(book.cover || defaultCover)}" alt="${escapeHtml(book.title)}の表紙" class="book-cover">
+                        <span class="${statusClass}">${statusText}</span>
                     </div>
                     <div class="book-info">
                         <h2>${escapeHtml(book.title)}</h2>
@@ -355,7 +400,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </article>
             `;
         }).join('');
-        renderBookshelfEmptyState();
     }
 
     function renderBookshelfEmptyState() {
@@ -743,14 +787,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleBookFormSubmit(event) {
         event.preventDefault();
         const title = bookTitleInput.value.trim();
-        if (!title) {
-            alert('タイトルを入力してください。');
-            return;
-        }
-        const author = bookAuthorInput.value.trim() || '著者未設定';
+        const author = bookAuthorInput.value.trim();
         const isbn = bookIsbnInput.value.trim();
         const coverUrl = bookCoverUrlInput.value.trim();
         const cover = bookCoverDraft || coverUrl || defaultCover;
+        const status = bookStatusInput.value;
         const newBookId = generateId('book');
         const now = Date.now();
         appData.books[newBookId] = {
@@ -759,18 +800,19 @@ document.addEventListener('DOMContentLoaded', () => {
             author,
             isbn,
             cover,
+            status,
             createdAt: now,
             memos: []
         };
         saveData();
+        bookForm.reset();
+        bookCoverDraft = null;
+        updateBookCoverPreview('');
         closeBookModal();
         renderBookshelf();
         updateTagSuggestions();
         updateSearchTagFilter();
-        currentBookId = newBookId;
-        activeBookTagFilter = null;
-        renderBookDetail();
-        showScreen('book-detail-screen');
+        alert('書籍を登録しました。');
     }
 
     function updateBookCoverPreview(src) {
@@ -1459,6 +1501,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateSearchTagFilter();
         showScreen('search-screen');
+        refreshSearchView();
     }
 
     function openBookFromSearch(bookId) {
@@ -1466,240 +1509,210 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         currentBookId = bookId;
-        activeBookTagFilter = null;
         renderBookDetail();
         showScreen('book-detail-screen');
     }
 
     // ==================== イベントリスナー ====================
 
-    if (bookListContainer) {
-        bookListContainer.addEventListener('click', event => {
-            const card = event.target.closest('.book-item');
-            if (!card) {
-                return;
-            }
-            const bookId = card.dataset.bookId;
-            if (!bookId || !appData.books[bookId]) {
-                return;
-            }
-            currentBookId = bookId;
-            activeBookTagFilter = null;
-            renderBookDetail();
-            showScreen('book-detail-screen');
+    if (addBookButton) {
+        addBookButton.addEventListener('click', () => {
+            openBookModal();
         });
     }
 
-    memoForm.addEventListener('submit', handleMemoFormSubmit);
-
-    memoCancelButton.addEventListener('click', () => {
-        resetMemoFormState();
-        if (currentBookId && appData.books[currentBookId]) {
-            renderBookDetail();
-            showScreen('book-detail-screen');
-        } else {
-            showScreen('bookshelf-screen');
-        }
-    });
-
-    attachPhotoButton.addEventListener('click', () => {
-        photoInput.click();
-    });
-
-    photoInput.addEventListener('change', event => {
-        handlePhotoFiles(event.target.files);
-        photoInput.value = '';
-    });
-
-    if (memoTagSuggestions) {
-        memoTagSuggestions.addEventListener('click', event => {
-            const tagButton = event.target.closest('[data-action="append-tag"]');
-            if (!tagButton) {
-                return;
-            }
-            const tag = tagButton.dataset.tag;
-            if (!tag) {
-                return;
-            }
-            const existing = parseTagInput(memoTagInput.value);
-            if (!existing.includes(tag)) {
-                existing.push(tag);
-                memoTagInput.value = existing.join(', ');
-            }
-            memoTagInput.focus();
-        });
+    if (bookForm) {
+        bookForm.addEventListener('submit', handleBookFormSubmit);
     }
 
-    searchInput.addEventListener('input', () => {
-        refreshSearchView();
-    });
-
-    clearSearchButton.addEventListener('click', () => {
-        searchInput.value = '';
-        searchState.tags.clear();
-        updateSearchTagFilter();
-        refreshSearchView();
-    });
-
-    if (searchTagFilter) {
-        searchTagFilter.addEventListener('click', event => {
-            const tagButton = event.target.closest('[data-action="toggle-search-tag"]');
-            if (!tagButton) {
-                return;
-            }
-            const tag = tagButton.dataset.tag;
-            if (!tag) {
-                return;
-            }
-            if (searchState.tags.has(tag)) {
-                searchState.tags.delete(tag);
-            } else {
-                searchState.tags.add(tag);
-            }
-            updateSearchTagFilter();
-            refreshSearchView();
-        });
+    if (bookFormCancel) {
+        bookFormCancel.addEventListener('click', closeBookModal);
     }
 
-    navBookshelf.addEventListener('click', () => {
-        showScreen('bookshelf-screen');
-    });
+    if (bookModalClose) {
+        bookModalClose.addEventListener('click', closeBookModal);
+    }
 
-    navSearch.addEventListener('click', () => {
-        showScreen('search-screen');
-        searchInput.focus();
-    });
-
-    searchButton.addEventListener('click', () => {
-        showScreen('search-screen');
-        searchInput.focus();
-    });
-
-    addBookButton.addEventListener('click', () => {
-        openBookModal();
-    });
-
-    bookForm.addEventListener('submit', handleBookFormSubmit);
-
-    bookFormCancel.addEventListener('click', closeBookModal);
-    bookModalClose.addEventListener('click', closeBookModal);
     if (bookModalBackdrop) {
         bookModalBackdrop.addEventListener('click', closeBookModal);
     }
 
-    bookCoverInput.addEventListener('change', event => {
-        const file = event.target.files && event.target.files[0];
-        if (!file) {
-            return;
-        }
-        if (!file.type.startsWith('image/')) {
-            alert('画像ファイルを選択してください。');
-            bookCoverInput.value = '';
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-            bookCoverDraft = reader.result;
-            updateBookCoverPreview(bookCoverDraft);
-        };
-        reader.readAsDataURL(file);
-    });
+    if (bookCoverUrlInput) {
+        bookCoverUrlInput.addEventListener('input', (e) => {
+            updateBookCoverPreview(e.target.value);
+        });
+    }
 
-    bookCoverUrlInput.addEventListener('input', () => {
-        if (bookCoverDraft) {
-            return;
-        }
-        const url = bookCoverUrlInput.value.trim();
-        updateBookCoverPreview(url);
-    });
+    if (bookCoverInput) {
+        bookCoverInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    bookCoverDraft = ev.target.result;
+                    updateBookCoverPreview(bookCoverDraft);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
 
     if (bookSearchButton) {
         bookSearchButton.addEventListener('click', async () => {
             const query = bookTitleInput.value.trim();
             if (!query) {
-                alert('検索するタイトルを入力してください。');
+                alert('タイトルを入力してください');
                 return;
             }
+            
+            clearBookSearchResults();
+            setBookSearchLoading('検索中...');
+            bookSearchState.isLoading = true;
+            
             try {
-                bookSearchState.isLoading = true;
-                setBookSearchLoading('検索中...');
                 const results = await searchBooksByKeyword(query);
                 bookSearchState.results = results;
-                bookSearchState.isLoading = false;
                 renderBookSearchResults(results, query);
             } catch (error) {
+                setBookSearchLoading('検索中にエラーが発生しました');
+            } finally {
                 bookSearchState.isLoading = false;
-                if (bookSearchResults) {
-                    bookSearchResults.innerHTML = '<p class="placeholder">検索中にエラーが発生しました。時間をおいて再度お試しください。</p>';
-                    bookSearchResults.hidden = false;
-                }
             }
         });
     }
 
     if (bookSearchResults) {
-        bookSearchResults.addEventListener('click', event => {
-            const button = event.target.closest('.book-search-result');
-            if (!button) {
-                return;
+        bookSearchResults.addEventListener('click', (e) => {
+            const button = e.target.closest('.book-search-result');
+            if (!button) return;
+            
+            const index = parseInt(button.dataset.searchIndex, 10);
+            const bookData = bookSearchState.results[index];
+            if (bookData) {
+                prefillBookFormWithData(bookData);
+                clearBookSearchResults();
             }
-            const index = Number(button.dataset.searchIndex);
-            const item = Number.isNaN(index) ? null : bookSearchState.results[index];
-            if (!item) {
-                return;
-            }
-            prefillBookFormWithData(item);
-            if (item.title) {
-                bookTitleInput.value = item.title;
-            }
-            clearBookSearchResults();
         });
     }
 
     if (bookScanButton) {
-        bookScanButton.addEventListener('click', () => {
-            openScanModal().catch(error => console.error('Failed to open scan modal', error));
-        });
-    }
-
-    if (scanCancelButton) {
-        scanCancelButton.addEventListener('click', () => {
-            closeScanModal();
-        });
+        bookScanButton.addEventListener('click', openScanModal);
     }
 
     if (scanModalClose) {
-        scanModalClose.addEventListener('click', () => {
-            closeScanModal();
-        });
+        scanModalClose.addEventListener('click', closeScanModal);
     }
 
     if (scanModalBackdrop) {
-        scanModalBackdrop.addEventListener('click', () => {
-            closeScanModal();
-        });
+        scanModalBackdrop.addEventListener('click', closeScanModal);
+    }
+
+    if (scanCancelButton) {
+        scanCancelButton.addEventListener('click', closeScanModal);
     }
 
     if (scanRetryButton) {
-        scanRetryButton.addEventListener('click', () => {
+        scanRetryButton.addEventListener('click', async () => {
             stopBarcodeScan();
-            setScanStatus('カメラを初期化しています…');
-            startBarcodeScan().catch(error => console.error('Failed to restart barcode scan', error));
+            await startBarcodeScan();
         });
     }
 
-    document.body.addEventListener('click', event => {
+    if (memoForm) {
+        memoForm.addEventListener('submit', handleMemoFormSubmit);
+    }
+
+    if (memoCancelButton) {
+        memoCancelButton.addEventListener('click', () => {
+            if (currentBookId) {
+                showScreen('book-detail-screen');
+            } else {
+                showScreen('bookshelf-screen');
+            }
+        });
+    }
+
+    if (photoInput) {
+        photoInput.addEventListener('change', (event) => {
+            handlePhotoFiles(event.target.files);
+            event.target.value = '';
+        });
+    }
+
+    if (attachPhotoButton) {
+        attachPhotoButton.addEventListener('click', () => {
+            photoInput.click();
+        });
+    }
+
+    if (memoTagSuggestions) {
+        memoTagSuggestions.addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button) return;
+            const action = button.dataset.action;
+            const tag = button.dataset.tag;
+            if (action === 'append-tag') {
+                const currentTags = parseTagInput(memoTagInput.value);
+                if (!currentTags.includes(tag)) {
+                    currentTags.push(tag);
+                    memoTagInput.value = currentTags.join(', ');
+                }
+            }
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            refreshSearchView();
+        });
+    }
+
+    if (clearSearchButton) {
+        clearSearchButton.addEventListener('click', () => {
+            searchInput.value = '';
+            refreshSearchView();
+            searchInput.focus();
+        });
+    }
+
+    if (searchTagFilter) {
+        searchTagFilter.addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button) return;
+            const action = button.dataset.action;
+            const tag = button.dataset.tag;
+            if (action === 'toggle-search-tag') {
+                applySearchTag(tag);
+            }
+        });
+    }
+
+    if (navBookshelf) {
+        navBookshelf.addEventListener('click', (event) => {
+            event.preventDefault();
+            showScreen('bookshelf-screen');
+        });
+    }
+
+    if (navSearch) {
+        navSearch.addEventListener('click', (event) => {
+            event.preventDefault();
+            showScreen('search-screen');
+        });
+    }
+
+    // 動的生成要素のイベント委譲
+    document.addEventListener('click', (event) => {
         const actionButton = event.target.closest('[data-action]');
-        if (!actionButton) {
-            return;
-        }
+        if (!actionButton) return;
+
         const action = actionButton.dataset.action;
         switch (action) {
-            case 'delete-memo':
-                handleDeleteMemo(actionButton.dataset.bookId, actionButton.dataset.memoId);
-                break;
             case 'edit-memo':
                 handleStartEdit(actionButton.dataset.bookId, actionButton.dataset.memoId);
+                break;
+            case 'delete-memo':
+                handleDeleteMemo(actionButton.dataset.bookId, actionButton.dataset.memoId);
                 break;
             case 'remove-photo':
                 removePendingPhoto(actionButton.dataset.photoId);
@@ -1742,6 +1755,92 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // ==================== データ管理・設定 ====================
+
+    function exportData() {
+        const dataStr = JSON.stringify(appData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reading_log_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function importData(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (!importedData || typeof importedData !== 'object' || !importedData.books) {
+                    throw new Error('無効なデータ形式です');
+                }
+                appData = normalizeData(importedData);
+                saveData();
+                renderBookshelf();
+                updateTagSuggestions();
+                updateSearchTagFilter();
+                alert('データをインポートしました。');
+                settingsModal.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert('データの読み込みに失敗しました。ファイル形式を確認してください。');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    if (settingsButton) {
+        settingsButton.addEventListener('click', () => {
+            settingsModal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+        });
+    }
+
+    if (settingsModalClose) {
+        settingsModalClose.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+            document.body.classList.remove('modal-open');
+        });
+    }
+
+    if (settingsModalBackdrop) {
+        settingsModalBackdrop.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+            document.body.classList.remove('modal-open');
+        });
+    }
+
+    if (exportDataButton) {
+        exportDataButton.addEventListener('click', exportData);
+    }
+
+    if (importDataButton) {
+        importDataButton.addEventListener('click', () => {
+            importFileInput.click();
+        });
+    }
+
+    if (importFileInput) {
+        importFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                importData(file);
+            }
+            event.target.value = '';
+        });
+    }
+
+    if (statusFilter) {
+        statusFilter.addEventListener('change', () => {
+            renderBookshelf();
+        });
+    }
 
     // ==================== 初期化 ====================
 

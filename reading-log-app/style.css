@@ -52,6 +52,10 @@ header {
     font-weight: 600;
     margin: 0;
 }
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
 .icon-button {
     background: none;
     border: none;
@@ -833,4 +837,35 @@ button.secondary.small {
     .search-result-header button {
         grid-column: span 2;
     }
+}
+
+/* Settings Modal */
+.settings-section {
+    margin-bottom: 24px;
+}
+.settings-section h3 {
+    font-size: 1.1rem;
+    margin: 0 0 8px;
+    color: var(--text-color);
+}
+.settings-desc {
+    font-size: 0.9rem;
+    color: var(--muted-text);
+    margin: 0 0 16px;
+    line-height: 1.5;
+}
+.settings-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.settings-actions button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+}
+.settings-actions .icon {
+    font-size: 1.2rem;
 }
